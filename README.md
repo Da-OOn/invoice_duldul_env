@@ -1,1 +1,1 @@
-# yolov5_custom-dataset_invoice-recognition
+cd invoice_duldul_env
