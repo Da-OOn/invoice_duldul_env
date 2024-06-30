@@ -1,6 +1,6 @@
 # YOLOv5 Custom Dataset Invoice Recognition
 
-This repository contains the `invoice_duldul` environment used for recognizing and processing invoices using a custom YOLOv5 model. It's for project about duldul-e!!♥v♥
+This repository contains the `invoice_duldul` environment used for recognizing and processing invoices using a custom YOLOv5 model.
 
 ## Overview
 
@@ -15,8 +15,8 @@ To recreate the `invoice_duldul` environment, use the provided `environment.yml`
 1. **Clone the repository:**
 
     ```bash
-    git clone https://github.com/Da-OOn/yolov5-custom-dataset-invoice-recognition.git
-    cd yolov5-custom-dataset-invoice-recognition
+    git clone https://github.com/Da-OOn/invoice_duldul_env.git
+    cd invoice_duldul_env
     ```
 
 2. **Create the conda environment:**
