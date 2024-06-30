@@ -1,6 +1,6 @@
 # YOLOv5 Custom Dataset Invoice Recognition
 
-This repository contains the `invoice_duldul` environment used for recognizing and processing invoices using a custom YOLOv5 model.
+This repository contains the `invoice_duldul` environment used for recognizing and processing invoices using a custom YOLOv5 model. It's for project about duldul-e!!♥v♥
 
 ## Overview
 
