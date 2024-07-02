@@ -41,3 +41,5 @@ Ensure your webcam is connected and functional, as the script uses it to capture
 
 ```bash
 python rt_invoice_3.py
+
+### https://velog.io/@lupin/Install-Miniconda-on-Raspberry-PI
