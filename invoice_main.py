@@ -3,17 +3,9 @@ import torch
 import pytesseract
 from datetime import datetime
 import os
-import subprocess
 import time
-from fuzzywuzzy import fuzz, process
-
-# 사용자 딕셔너리 정의
-user_duldul = {
-    '이민진': 'A',
-    '정다운': 'B',
-    '이재진': 'C',
-    '제갈준영': 'D'
-}
+from process_duldul_list import process_duldul_list  # 함수 불러오기
+from fuzzywuzzy import fuzz
 
 # Tesseract 실행 파일 경로 설정 (필요한 경우)
 # pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'  # Tesseract 설치 경로
@@ -34,16 +26,18 @@ if not cap.isOpened():
 
 # duldul_list 초기화
 duldul_list = []
+previous_names = []  # 이전에 캡처된 이름들을 저장하기 위한 리스트
 
-# 캡처된 송장 수
-capture_count = 0
-max_captures = 3
+def extract_name(text):
+    # 정규 표현식이나 특정 패턴을 사용하여 이름 추출
+    # 예시: 여기서는 단순히 라인 중 첫 번째 단어를 이름으로 간주
+    lines = text.split('\n')
+    for line in lines:
+        if line.strip():  # 비어있지 않은 라인
+            return line.strip()
+    return None
 
-def find_best_match(extracted_text, user_duldul):
-    best_match = process.extractOne(extracted_text, user_duldul.keys(), scorer=fuzz.token_sort_ratio)
-    return best_match
-
-while capture_count < max_captures:
+while True:
     # 웹캠에서 프레임 읽기
     ret, frame = cap.read()
     if not ret:
@@ -61,42 +55,31 @@ while capture_count < max_captures:
         x1, y1, x2, y2 = map(int, box)
         label = f'{model.names[int(cls)]} {conf:.2f}'
 
-        # 'invoice' 클래스이고, 정확도가 0.85 이상일 때
-        if model.names[int(cls)] == 'invoice' and conf >= 0.85:
+        # 'invoice' 클래스이고, 정확도가 0.80 이상일 때
+        if model.names[int(cls)] == 'invoice' and conf >= 0.80:
             bbox_area = (x2 - x1) * (y2 - y1)
             img_area = frame.shape[0] * frame.shape[1]
 
-            # 바운딩 박스가 전체 이미지의 50% 이상일 때
-            if bbox_area >= 0.5 * img_area:
-                # tts/speak.py 실행 (이미지 캡처 시)
-                # subprocess.run(['python', 'tts/speak.py'])
-
+            # 바운딩 박스가 전체 이미지의 40% 이상일 때
+            if bbox_area >= 0.4 * img_area:
                 # 이미지 캡처
                 captured_image_path = os.path.join(output_dir, f'invoice_{timestamp}.png')
                 cv2.imwrite(captured_image_path, frame[y1:y2, x1:x2])
 
                 # Tesseract OCR로 텍스트 추출 (한글 데이터 사용)
                 text = pytesseract.image_to_string(frame[y1:y2, x1:x2], lang='kor')
-                if text.strip():  # 추출된 텍스트가 있는지 확인
-                    best_match, score = find_best_match(text, user_duldul)
-                    if score >= 80:  # 임계값 설정
-                        matched_value = user_duldul[best_match]
-                        if not duldul_list or duldul_list[-1] != matched_value:
-                            duldul_list.append(matched_value)
-                            print(f"Matched: {text} -> {best_match} (score: {score})")
-                            print(f"Captured Image Path: {captured_image_path}")
-                            print("Extracted Text:")
-                            print(text)
-                            # 캡처된 송장 수 증가
-                            capture_count += 1
-                            print(f"OCR 완료되었습니다. 현재 캡처된 송장 수: {capture_count}")
+                name = extract_name(text)
+                if name and all(fuzz.token_sort_ratio(name, prev_name) < 80 for prev_name in previous_names):
+                    duldul_list.append(text)
+                    previous_names.append(name)  # 이전 이름 리스트에 추가
+                    print(f"Captured Image Path: {captured_image_path}")
+                    print("Extracted Text:")
+                    print(text)
 
-                            # 5초 대기
-                            time.sleep(5)
+                    print(f"OCR 완료되었습니다. 현재 캡처된 송장 수: {len(duldul_list)}")
 
-                            # 3개의 송장이 캡처되면 루프 종료
-                            if capture_count >= max_captures:
-                                break
+                    # 3초 대기
+                    time.sleep(3)
 
         # 바운딩 박스 그리기
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -109,18 +92,23 @@ while capture_count < max_captures:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
+    # duldul_list를 입력으로 받아서 duldul_shiplist를 생성
+    duldul_shiplist = process_duldul_list(duldul_list)
+
+    # 서로 다른 알파벳 3개가 들어올 때까지 반복
+    if len(duldul_shiplist) >= 3:
+        break
+
 # 웹캠 해제 및 윈도우 닫기
 cap.release()
 cv2.destroyAllWindows()
 
-# 알파벳 순으로 정렬
-duldul_shiplist = sorted(duldul_list)
-
 # OCR 텍스트 파일로 저장
-if duldul_shiplist:
+if duldul_list:
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')  # 타임스탬프 다시 생성
     ocr_output_path = os.path.join(output_dir, f'ocr_results_{timestamp}.txt')
     with open(ocr_output_path, 'w') as f:
-        for idx, text in enumerate(duldul_shiplist, start=1):
+        for idx, text in enumerate(duldul_list, start=1):
             f.write(f"Index {idx}:\n")
             f.write("Extracted Text:\n")
             f.write(text)
@@ -128,6 +116,9 @@ if duldul_shiplist:
     print(f"OCR results saved to {ocr_output_path}")
 else:
     print("No OCR results to save.")
+
+# 최종 duldul_list 출력
+print("최종 duldul_list:", duldul_list)
 
 # 최종 duldul_shiplist 출력
 print("최종 duldul_shiplist:", duldul_shiplist)
