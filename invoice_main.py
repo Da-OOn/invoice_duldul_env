@@ -4,6 +4,7 @@ import pytesseract
 from datetime import datetime
 import os
 import time
+import pandas as pd
 from process_duldul_list import process_duldul_list  # 함수 불러오기
 from fuzzywuzzy import fuzz
 
@@ -24,13 +25,22 @@ if not cap.isOpened():
     print("Error: Could not open webcam.")
     exit()
 
+# CSV 파일 읽기 (cp949 인코딩 사용)
+info_df = pd.read_csv('info.csv', encoding='cp949')
+user_df = pd.read_csv('user.csv', encoding='cp949')
+
 # duldul_list 초기화
-duldul_list = []
+duldul_list = info_df.copy()
+duldul_list['name'] = ''
+duldul_list['location'] = ''
+duldul_list['point_x'] = 0
+duldul_list['point_y'] = 0
+duldul_list['radian_lotation'] = 0
+
 previous_names = []  # 이전에 캡처된 이름들을 저장하기 위한 리스트
 
 def extract_name(text):
     # 정규 표현식이나 특정 패턴을 사용하여 이름 추출
-    # 예시: 여기서는 단순히 라인 중 첫 번째 단어를 이름으로 간주
     lines = text.split('\n')
     for line in lines:
         if line.strip():  # 비어있지 않은 라인
@@ -70,16 +80,35 @@ while True:
                 text = pytesseract.image_to_string(frame[y1:y2, x1:x2], lang='kor')
                 name = extract_name(text)
                 if name and all(fuzz.token_sort_ratio(name, prev_name) < 80 for prev_name in previous_names):
-                    duldul_list.append(text)
-                    previous_names.append(name)  # 이전 이름 리스트에 추가
-                    print(f"Captured Image Path: {captured_image_path}")
-                    print("Extracted Text:")
-                    print(text)
+                    # 가장 비슷한 이름 찾기
+                    best_match = None
+                    best_score = 0
+                    for _, row in user_df.iterrows():
+                        score = fuzz.token_sort_ratio(name, row['name'])
+                        if score > best_score:
+                            best_match = row
+                            best_score = score
+                    
+                    if best_match is not None and best_match['name'] not in previous_names:
+                        new_row = info_df.iloc[0].copy()
+                        new_row['name'] = best_match['name']
+                        new_row['location'] = best_match['location']
+                        new_row['point_x'] = best_match['point_x']
+                        new_row['point_y'] = best_match['point_y']
+                        new_row['radian_lotation'] = best_match['radian_lotation']
+                        
+                        duldul_list = duldul_list.append(new_row, ignore_index=True)
+                        previous_names.append(best_match['name'])
 
-                    print(f"OCR 완료되었습니다. 현재 캡처된 송장 수: {len(duldul_list)}")
+                        print(f"Captured Image Path: {captured_image_path}")
+                        print("Extracted Text:")
+                        print(text)
+                        print(f"Matched Name: {best_match['name']}")
 
-                    # 3초 대기
-                    time.sleep(3)
+                        print(f"OCR 완료되었습니다. 현재 캡처된 송장 수: {len(duldul_list)}")
+
+                        # 3초 대기
+                        time.sleep(3)
 
         # 바운딩 박스 그리기
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -104,14 +133,14 @@ cap.release()
 cv2.destroyAllWindows()
 
 # OCR 텍스트 파일로 저장
-if duldul_list:
+if not duldul_list.empty:
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')  # 타임스탬프 다시 생성
     ocr_output_path = os.path.join(output_dir, f'ocr_results_{timestamp}.txt')
-    with open(ocr_output_path, 'w') as f:
-        for idx, text in enumerate(duldul_list, start=1):
-            f.write(f"Index {idx}:\n")
+    with open(ocr_output_path, 'w', encoding='utf-8-sig') as f:
+        for idx, row in duldul_list.iterrows():
+            f.write(f"Index {idx+1}:\n")
             f.write("Extracted Text:\n")
-            f.write(text)
+            f.write(row['name'])
             f.write("\n\n")
     print(f"OCR results saved to {ocr_output_path}")
 else:
@@ -120,5 +149,10 @@ else:
 # 최종 duldul_list 출력
 print("최종 duldul_list:", duldul_list)
 
-# 최종 duldul_shiplist 출력
+# 최종 duldul_shiplist 알파벳 순 정렬 및 출력
+duldul_shiplist = duldul_list.sort_values(by='location').reset_index(drop=True)
 print("최종 duldul_shiplist:", duldul_shiplist)
+
+# duldul_shiplist를 CSV로 저장 (utf-8-sig 인코딩 사용)
+duldul_shiplist.to_csv(os.path.join(output_dir, 'duldul_shiplist.csv'), index=False, encoding='utf-8-sig')
+print("duldul_shiplist saved to duldul_shiplist.csv")
