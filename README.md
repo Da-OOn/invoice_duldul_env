@@ -47,3 +47,6 @@ Ensure your webcam is connected and functional, as the script uses it to capture
 
 ```bash
 python invoice_main.py
+
+
+덜덜이 얼굴 prototype!!!! https://www.figma.com/design/CybQ51lG0dFeS7U9cCacEs/%EB%8D%9C%EB%8D%9C%EC%9D%B4-GUI-design_oon?node-id=0-1&t=Og1gYvbETUT9NLJh-0
